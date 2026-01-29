@@ -1,0 +1,37 @@
+\contentsline {section}{\numberline {1}Introduction}{3}{section.1}%
+\contentsline {subsection}{\numberline {1.1}Theoretical Foundation}{3}{subsection.1.1}%
+\contentsline {section}{\numberline {2}Simulation Architecture}{3}{section.2}%
+\contentsline {subsection}{\numberline {2.1}Agent Types and Behaviors}{3}{subsection.2.1}%
+\contentsline {subsubsection}{\numberline {2.1.1}Provider Agents}{4}{subsubsection.2.1.1}%
+\contentsline {subsubsection}{\numberline {2.1.2}Client Agents}{4}{subsubsection.2.1.2}%
+\contentsline {subsubsection}{\numberline {2.1.3}Challenger Agents}{4}{subsubsection.2.1.3}%
+\contentsline {subsection}{\numberline {2.2}Market Mechanism}{4}{subsection.2.2}%
+\contentsline {subsection}{\numberline {2.3}Reputation System}{5}{subsection.2.3}%
+\contentsline {subsection}{\numberline {2.4}Simulation Parameters}{5}{subsection.2.4}%
+\contentsline {section}{\numberline {3}Experimental Results}{6}{section.3}%
+\contentsline {subsection}{\numberline {3.1}Experiment 1: Equilibrium Convergence}{6}{subsection.3.1}%
+\contentsline {subsubsection}{\numberline {3.1.1}Methodology}{6}{subsubsection.3.1.1}%
+\contentsline {subsubsection}{\numberline {3.1.2}Theoretical Predictions}{6}{subsubsection.3.1.2}%
+\contentsline {subsubsection}{\numberline {3.1.3}Results}{6}{subsubsection.3.1.3}%
+\contentsline {subsection}{\numberline {3.2}Experiment 2: Parameter Sensitivity}{6}{subsection.3.2}%
+\contentsline {subsubsection}{\numberline {3.2.1}Sensitivity to Minimum Stake $S_P^{min}$}{7}{subsubsection.3.2.1}%
+\contentsline {subsubsection}{\numberline {3.2.2}Sensitivity to Enforcement Probability $p_w$}{7}{subsubsection.3.2.2}%
+\contentsline {subsubsection}{\numberline {3.2.3}Sensitivity to Verification Cost $C_{safe}$}{7}{subsubsection.3.2.3}%
+\contentsline {subsection}{\numberline {3.3}Experiment 3: Attack Vector Analysis}{8}{subsection.3.3}%
+\contentsline {subsubsection}{\numberline {3.3.1}Attack Taxonomy}{8}{subsubsection.3.3.1}%
+\contentsline {subsubsection}{\numberline {3.3.2}Results}{8}{subsubsection.3.3.2}%
+\contentsline {subsubsection}{\numberline {3.3.3}Griefing and Censorship Resilience}{9}{subsubsection.3.3.3}%
+\contentsline {subsection}{\numberline {3.4}Experiment 4: Reputation Farming Deep Analysis}{9}{subsection.3.4}%
+\contentsline {subsubsection}{\numberline {3.4.1}Attack Mechanism}{9}{subsubsection.3.4.1}%
+\contentsline {subsubsection}{\numberline {3.4.2}Optimal Farming Duration}{9}{subsubsection.3.4.2}%
+\contentsline {subsubsection}{\numberline {3.4.3}Mitigation: Stake-Weighted Reputation}{10}{subsubsection.3.4.3}%
+\contentsline {subsection}{\numberline {3.5}Experiment 5: Minimum Viable Stake Thresholds}{10}{subsection.3.5}%
+\contentsline {section}{\numberline {4}Discussion}{11}{section.4}%
+\contentsline {subsection}{\numberline {4.1}Key Findings}{11}{subsection.4.1}%
+\contentsline {subsection}{\numberline {4.2}Protocol Design Recommendations}{11}{subsection.4.2}%
+\contentsline {subsection}{\numberline {4.3}Limitations and Future Work}{12}{subsection.4.3}%
+\contentsline {section}{\numberline {5}Conclusion}{12}{section.5}%
+\contentsline {section}{\numberline {A}Simulation Implementation Details}{12}{appendix.A}%
+\contentsline {subsection}{\numberline {A.1}Random Number Generation}{12}{subsection.A.1}%
+\contentsline {subsection}{\numberline {A.2}Computational Complexity}{12}{subsection.A.2}%
+\contentsline {subsection}{\numberline {A.3}Validation Procedures}{13}{subsection.A.3}%

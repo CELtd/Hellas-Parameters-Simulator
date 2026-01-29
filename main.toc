@@ -1,0 +1,26 @@
+\contentsline {part}{I\hspace {1em}Fraud Enforcement}{5}{part.1}%
+\contentsline {section}{\numberline {1}Incentive Conditions}{5}{section.1}%
+\contentsline {subsection}{\numberline {1.1}Provider incentives}{5}{subsection.1.1}%
+\contentsline {subsection}{\numberline {1.2}Challenger incentives to dispute}{6}{subsection.1.2}%
+\contentsline {section}{\numberline {2}Enforcement viability and participation}{7}{section.2}%
+\contentsline {subsection}{\numberline {2.1}Provider participation}{7}{subsection.2.1}%
+\contentsline {subsection}{\numberline {2.2}Feasibility and timeouts}{7}{subsection.2.2}%
+\contentsline {section}{\numberline {3}Trusted on-chain fallback providers}{7}{section.3}%
+\contentsline {section}{\numberline {4}Client participation and welfare accounting}{8}{section.4}%
+\contentsline {part}{II\hspace {1em}Fraud Detection}{9}{part.2}%
+\contentsline {section}{\numberline {5}Belief-based auditing}{9}{section.5}%
+\contentsline {subsection}{\numberline {5.1}Signals and posterior belief}{9}{subsection.5.1}%
+\contentsline {subsection}{\numberline {5.2}Audit and dispute decisions}{9}{subsection.5.2}%
+\contentsline {section}{\numberline {6}Inspection game with mixed equilibrium}{10}{section.6}%
+\contentsline {subsection}{\numberline {6.1}Game specification}{10}{subsection.6.1}%
+\contentsline {subsection}{\numberline {6.2}Mixed equilibrium}{10}{subsection.6.2}%
+\contentsline {subsection}{\numberline {6.3}Interpretation and comparative statics}{11}{subsection.6.3}%
+\contentsline {section}{\numberline {7}Reputation and repeated interaction (extension)}{11}{section.7}%
+\contentsline {section}{\numberline {8}Protocol design recommendations}{12}{section.8}%
+\contentsline {subsection}{\numberline {8.1}Stake floors indexed by job class}{12}{subsection.8.1}%
+\contentsline {subsection}{\numberline {8.2}Permissionless challenging and watcher markets}{12}{subsection.8.2}%
+\contentsline {subsection}{\numberline {8.3}Randomized audits}{12}{subsection.8.3}%
+\contentsline {subsection}{\numberline {8.4}Reducing verification cost}{12}{subsection.8.4}%
+\contentsline {subsection}{\numberline {8.5}Timeout sizing}{12}{subsection.8.5}%
+\contentsline {subsection}{\numberline {8.6}Anti-griefing}{12}{subsection.8.6}%
+\contentsline {section}{\numberline {9}Conclusions}{13}{section.9}%

@@ -1,0 +1,499 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{geometry}
+\usepackage{enumitem}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\usepackage{tcolorbox}
+\usepackage{hyperref}
+
+\geometry{margin=1in}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue!60!black,
+  urlcolor=blue!60!black,
+  citecolor=blue!60!black
+}
+
+%========================
+% Boxes
+%========================
+\newtcolorbox{keybox}[1][]{
+    colback=blue!5,
+    colframe=blue!50!black,
+    fonttitle=\bfseries,
+    #1
+}
+
+\newtcolorbox{notebox}[1][]{
+    colback=gray!10,
+    colframe=gray!60!black,
+    title=Note,
+    fonttitle=\bfseries,
+    #1
+}
+
+%========================
+% Theorems
+%========================
+\newtheorem{theorem}{Theorem}
+\newtheorem{proposition}{Proposition}
+\newtheorem{lemma}{Lemma}
+\newtheorem{definition}{Definition}
+\newtheorem{assumption}{Assumption}
+\newtheorem{condition}{Condition}
+
+%========================
+% Notation helpers
+%========================
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\Prob}{\mathbb{P}}
+
+\title{Fraud Game Analysis for Hellas Protocol: Incentives, Detection, and Protocol Design}
+\author{CryptoEconLab}
+\date{January 2026}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+We study the incentive properties of the Hellas fraud game for off-chain computation. Providers post stake that can be slashed if a challenger proves fraud. The objective is incentive compatibility: parameter regions where honest execution is an equilibrium outcome for rational, risk-neutral agents. The analysis separates (i) \emph{enforcement} in the dispute subgame, conditional on fraud being identified, and (ii) \emph{detection} when clients are informationally constrained and must decide whether to audit. Part~I derives the conditions under which disputing is privately profitable for a rational challenger and yields a minimum viable provider stake (or other at-risk funds) that eliminates an impunity region. Part~II models detection as an inspection game and characterizes the mixed-strategy equilibrium, including boundary cases and the role of job-specific loss from incorrect computation. We conclude with protocol design recommendations for stake floors, reward routing, permissionless challenging, randomized audits, and timeouts.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+%=============================================================================
+\section*{Introduction}
+%=============================================================================
+
+The Hellas fraud game secures off-chain computation through economic incentives. A provider posts collateral that is slashed if a challenger proves that the provider returned an incorrect result. The primary question is incentive compatibility: for which parameters does a rational provider prefer honest execution? Addressing this question requires separating two components.
+
+\begin{enumerate}
+\item \textbf{Enforcement (dispute subgame)}: conditional on fraud being identified, is it privately optimal for an eligible challenger to initiate a dispute and, if so, does the protocol execute slashing with sufficiently high reliability?
+\item \textbf{Detection (audit stage)}: when clients cannot immediately verify correctness, how frequently is fraud identified in equilibrium, and how does that frequency depend on stake and verification costs?
+\end{enumerate}
+
+Part~I analyzes enforcement by treating detection as given and by modeling imperfect enforcement reliability. Part~II analyzes detection by treating enforcement parameters as fixed and by modeling client auditing and provider cheating as an inspection game.
+
+A key premise is the existence of a safe fallback. There exists a method to compute the correct output and, when needed, construct a fraud proof accepted by the protocol. This premise anchors both incentives and feasibility, since the dispute mechanism must be executable within protocol time constraints.
+
+%=============================================================================
+\section*{Model Setup}
+%=============================================================================
+
+\subsection*{Actors}
+
+\begin{itemize}[nosep]
+    \item \textbf{Client} requests computation, escrows payment and any required bonds.
+    \item \textbf{Provider} performs computation, posts stake $S_P$ for the duration of the channel, and is paid $P_{set}$ if the channel settles without a successful fraud proof.
+    \item \textbf{Validators} (or an on-chain verifier) check the fraud proof and execute the associated state transition, including slashing.
+    \item \textbf{Challenger} is any entity that is permitted to initiate a dispute and present a fraud proof. In the baseline, the challenger is the client. In protocol variants, challenging can be permissionless.
+\end{itemize}
+
+\subsection*{Timeline and settlement rule}
+
+Time is discrete. A channel instance proceeds through the following phases.
+
+\begin{enumerate}[nosep]
+\item Channel open: the provider posts stake $S_P$; the client escrows the payment $P_{set}$ and any required bonds.
+\item Execution: the provider returns an output $y$.
+\item Challenge window of length $T$: any eligible challenger may initiate a dispute.
+\item Dispute resolution: the challenger posts a challenge bond $B_C$, computes a reference output via safe fallback, generates a fraud proof, and submits it. Validators verify the proof and execute slashing if the proof is accepted.
+\item Finalization: if no successful fraud proof is submitted before the deadline, the channel settles and the provider is paid $P_{set}$. If a successful fraud proof is submitted, the provider is slashed and payment routing follows the protocol rule described below.
+\end{enumerate}
+
+\subsection*{Assumptions}
+
+\begin{assumption}[Preferences and timing]
+Agents are risk-neutral and myopic at the level of a single channel instance. Repeated-game and reputation effects are discussed separately as extensions.
+\end{assumption}
+
+\begin{assumption}[Safe fallback and feasibility]
+There exists a procedure to compute the correct output at cost $C_{safe}$ and to generate a valid fraud proof at cost $c_{proof}$. The total wall-clock time required for safe fallback and proof generation is at most the dispute deadline, up to a buffer for transaction inclusion and finality.
+\end{assumption}
+
+\begin{assumption}[Enforcement reliability]
+Conditional on a valid fraud proof being submitted before the deadline, the protocol accepts the proof and executes slashing with probability $p_w \in (0,1]$. This parameter captures residual risks such as censorship, liveness failures, deadline misses, or verifier failure. Baseline analysis sets $p_w=1$.
+\end{assumption}
+
+\subsection*{Key Assumption: Safe Fallback Exists}
+
+Safe fallback is a method to compute the correct result and, if needed, produce a fraud proof that is accepted by the protocol. In the simplest case the client recomputes the job on their own infrastructure and uses the resulting trace as input to proof generation. Let $C_{safe}$ denote the total cost of this fallback computation, including engineering overhead and any fees required to access state or data.
+
+\begin{notebox}
+Trusted fallback providers can supply verification as a service. If the service market is competitive and the verification task is well specified, then the expected cost $C_{safe}$ decreases, which lowers the minimum stake required for credible enforcement and reduces expected auditing costs (Section~\ref{sec:trusted_providers}).
+\end{notebox}
+
+\subsection*{Parameters}
+
+Table~\ref{tab:params} lists the core parameters. All variables are channel-specific unless noted otherwise.
+
+\begin{table}[ht]
+\centering
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Symbol} & \textbf{Description} & \textbf{Set By} \\
+\midrule
+$S_P$ & Provider stake locked for the channel duration & Provider / protocol floor \\
+$P_{set}$ & Settlement payment to provider if no successful fraud proof & Bilateral \\
+$c_H$ & Provider cost of honest execution & Exogenous \\
+$c_F$ & Provider cost under cheating & Exogenous \\
+$C_{safe}$ & Cost of safe fallback computation & Market / job type \\
+$c_{proof}$ & Cost of fraud proof generation (conditional on fraud being found) & Exogenous \\
+$c_{tx}$ & On-chain transaction and operational overhead for disputing & Network conditions \\
+$\beta$ & Fraction of slashed stake paid to challenger on success & Protocol \\
+$\lambda$ & Fraction of $P_{set}$ routed to challenger on success & Protocol \\
+$B_C$ & Challenge bond posted with the dispute & Protocol \\
+$p_w$ & Probability a timely valid proof is accepted and enforced & Protocol environment \\
+$L$ & Client loss from accepting an incorrect result & Job dependent \\
+$r$ & Opportunity cost rate for locked capital & Market \\
+$\tau$ & Capital lock duration for stake and escrow & Protocol / job duration \\
+$T$ & Challenge window length & Protocol \\
+\bottomrule
+\end{tabular}
+\caption{Model parameters. The routing parameter $\lambda$ is defined so that, conditional on a successful fraud proof, the challenger receives $\lambda P_{set}$ and the provider does not receive that portion of payment.}
+\label{tab:params}
+\end{table}
+
+\subsection*{Dispute mechanics and routing}
+
+A dispute is initiated after an eligible challenger believes the output is incorrect and can produce a fraud proof. The challenger first computes a reference output via safe fallback, incurring cost $C_{safe}$. If fraud is found, the challenger generates a fraud proof at cost $c_{proof}$ and submits it on-chain along with any required transactions at cost $c_{tx}$, posting bond $B_C$. The proof is accepted and enforced with probability $p_w$.
+
+If enforcement succeeds, the provider stake $S_P$ is slashed. A fraction $\beta S_P$ is paid to the challenger. In addition, a fraction $\lambda P_{set}$ of the escrowed payment is routed to the challenger, with $\lambda=1$ corresponding to full refund to the challenger and $\lambda=0$ corresponding to no payment routing to the challenger. The bond $B_C$ is returned when enforcement succeeds and is forfeited when enforcement fails.
+
+For clarity, we treat challenge initiation as occurring only when the challenger has computed the safe fallback output. The analysis therefore separates (i) the decision to compute the safe fallback and (ii) conditional on finding fraud, the decision to submit a proof. This decomposition matters for the belief-based model in Part~II.
+
+\newpage
+
+%======================================================================
+\part{Fraud Enforcement}
+%======================================================================
+
+Part~I studies the dispute subgame conditional on fraud being discovered by some challenger. The key question is whether disputing is privately optimal for that challenger. If disputing is privately optimal with high probability, then cheating induces expected slashing and the provider incentive constraint can be satisfied.
+
+%=============================================================================
+\section{Incentive Conditions}
+%=============================================================================
+
+\subsection{Provider incentives}
+
+Let $p_d \in (0,1]$ denote the probability that a cheating provider is detected and successfully punished. This probability is conditional on the provider choosing to cheat. In Part~I, $p_d$ is determined by (i) whether a challenger initiates a dispute after discovering fraud and (ii) enforcement reliability $p_w$.
+
+\begin{definition}[Provider payoffs]
+\begin{align}
+U_P(H) &= P_{set} - c_H, \\
+U_P(C,\text{detected}) &= -S_P - c_F, \\
+U_P(C,\text{undetected}) &= P_{set} - c_F.
+\end{align}
+In $U_P(C,\text{detected})$ the provider does not receive $P_{set}$. This reflects the settlement rule that payment is released only when the channel settles without a successful fraud proof.
+\end{definition}
+
+\begin{proposition}[Provider incentive compatibility]
+\label{prop:provider-ic}
+A provider prefers honest execution over cheating if and only if
+\begin{equation}
+\boxed{\;p_d \geq \theta := \frac{c_H - c_F}{P_{set} + S_P}\;}
+\end{equation}
+When $c_F \approx 0$, this becomes $p_d \geq \frac{c_H}{P_{set}+S_P}$.
+\end{proposition}
+
+\begin{proof}
+Cheating yields expected payoff
+\[
+\E[U_P(C)] = (1-p_d)(P_{set}-c_F) + p_d(-S_P-c_F) = P_{set}-c_F - p_d(P_{set}+S_P).
+\]
+Honesty yields $U_P(H)=P_{set}-c_H$. Honest execution is preferred if and only if
+\[
+P_{set}-c_H \ge P_{set}-c_F - p_d(P_{set}+S_P).
+\]
+Rearranging gives $p_d(P_{set}+S_P) \ge c_H-c_F$, which is equivalent to the stated condition.
+\end{proof}
+
+The parameter $\theta$ is the minimum effective detection and enforcement probability required to deter cheating. Increasing $S_P$ lowers $\theta$ by increasing the expected penalty. Increasing $P_{set}$ lowers $\theta$ because the provider forfeits a larger payment if detected.
+
+%=============================================================================
+\subsection{Challenger incentives to dispute}
+
+We now derive conditions under which a challenger who has identified fraud finds it privately optimal to submit a dispute. The challenger could be the client or a permissionless watcher. The analysis is identical once costs and rewards are specified.
+
+Let the challenger incur total dispute cost
+\begin{equation}
+C_{disp} := C_{safe} + c_{proof} + c_{tx}.
+\end{equation}
+Conditional on fraud having occurred and having been identified by the challenger, the challenger receives reward
+\begin{equation}
+R := \beta S_P + \lambda P_{set}
+\end{equation}
+if enforcement succeeds. Enforcement succeeds with probability $p_w$. If enforcement fails, the challenger forfeits bond $B_C$. We assume the challenger posts the bond only when submitting the proof, so the bond is part of the dispute decision conditional on identifying fraud.
+
+\begin{proposition}[Dispute condition and minimum viable stake]
+\label{prop:dispute-condition}
+Conditional on identifying fraud, disputing is strictly optimal for the challenger if and only if
+\begin{equation}
+\boxed{\;p_w R - C_{disp} - (1-p_w)B_C > 0.\;}
+\end{equation}
+If $\beta>0$, a sufficient stake condition that guarantees disputing is optimal is
+\begin{equation}
+\boxed{\;S_P \ge S_P^{min} := \max\left\{0,\;\frac{C_{disp} + (1-p_w)B_C - p_w\lambda P_{set}}{p_w\beta}\right\}.\;}
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+Conditional on identifying fraud, the challenger compares not disputing, which yields payoff $0$, to disputing, which yields expected payoff
+\[
+\E[U_C(\text{dispute})] = p_w R - C_{disp} - (1-p_w)B_C.
+\]
+Disputing is strictly optimal if and only if this expression is positive. Solving $p_w(\beta S_P+\lambda P_{set}) - C_{disp} - (1-p_w)B_C > 0$ for $S_P$ yields the stated condition, with truncation at zero since stake is nonnegative.
+\end{proof}
+
+\begin{keybox}[title=Key implication]
+If $S_P < S_P^{min}$, then even after fraud is identified, disputing is not privately optimal for the challenger. In that region, the effective punishment probability $p_d$ collapses because disputes are not initiated.
+\end{keybox}
+
+The expression for $S_P^{min}$ highlights three protocol levers. Increasing $\beta$ increases the challenger reward per unit stake. Increasing $\lambda$ routes more of the at-risk payment to the challenger on success. Increasing $p_w$ makes enforcement more reliable and reduces the stake needed for credible enforcement.
+
+%=============================================================================
+\section{Enforcement viability and participation}
+
+We combine the challenger condition with the provider incentive constraint.
+
+\begin{theorem}[Fraud game viability under enforceable disputes]
+\label{thm:viability}
+Suppose that fraud is identified by an eligible challenger and that the provider stake satisfies $S_P \ge S_P^{min}$ from Proposition~\ref{prop:dispute-condition}. Then disputing is initiated and the provider is punished with probability at least $p_w$, so $p_d = p_w$ in the dispute subgame. Under these conditions, honest execution is incentive compatible for the provider if
+\begin{equation}
+\boxed{\;p_w \ge \theta = \frac{c_H-c_F}{P_{set}+S_P}.\;}
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+If $S_P \ge S_P^{min}$, then disputing is strictly optimal for the challenger conditional on identifying fraud, hence a dispute is initiated. Enforcement succeeds with probability $p_w$ by assumption, so the probability that cheating is detected and punished is $p_d=p_w$ in this subgame. Substituting $p_d=p_w$ into Proposition~\ref{prop:provider-ic} yields the stated condition.
+\end{proof}
+
+\subsection{Provider participation}
+
+Providers must also be willing to supply service. Stake is returned when the provider is honest, so the main stake cost is opportunity cost. Let $r$ be the per-unit-time opportunity cost of capital and let $\tau$ be the lock duration. A simple participation constraint is
+\begin{equation}
+\boxed{\;P_{set} \ge c_H + r S_P\tau + \kappa,\;}
+\end{equation}
+where $\kappa\ge 0$ captures operational overhead and risk premia. This constraint matters because raising $S_P$ to satisfy enforcement increases capital cost and therefore increases competitive pricing.
+
+\subsection{Feasibility and timeouts}
+
+Let $t_{safe}$ and $t_{proof}$ denote worst-case wall-clock times for safe fallback and proof generation for the job class. The protocol must set the challenge window $T$ so that disputes are feasible:
+\begin{equation}
+\boxed{\;T \ge t_{safe} + t_{proof} + t_{tx} + t_{finality},\;}
+\end{equation}
+where $t_{tx}$ is a buffer for transaction inclusion and $t_{finality}$ is a buffer for settlement finality. If this feasibility condition fails, then $p_w$ is effectively reduced and enforcement weakens even if incentives are otherwise aligned.
+
+%=============================================================================
+\section{Trusted on-chain fallback providers}
+\label{sec:trusted_providers}
+
+The safe fallback cost $C_{safe}$ is a central driver of both enforcement and detection. When verification is self-executed, $C_{safe}$ includes raw compute, engineering overhead, and any channel overhead required to bind the computation to a proof system. When verification can be outsourced to trusted fallback providers, $C_{safe}$ can decrease because the client avoids infrastructure overhead and obtains a predictable service.
+
+Lower $C_{safe}$ reduces the minimum viable stake $S_P^{min}$ in Proposition~\ref{prop:dispute-condition}, lowers the equilibrium cheating rate in Part~II, and lowers expected verification expenditure. In competitive equilibrium, providers still price in capital costs, so reductions in required stake reduce equilibrium prices via the participation constraint.
+
+%=============================================================================
+\section{Client participation and welfare accounting}
+
+A client joins if expected total cost is below the outside option. Let $C_{self}$ be the all-in cost of self-execution, including capital and operational overhead. Let $C_{chan}$ be the client cost of using the channel, including $P_{set}$, fees, and capital costs on any escrows.
+
+In settings where clients sometimes audit, expected cost includes expected verification expenditure. If the client audits with probability $v$, then the expected verification cost per job is approximately $v C_{safe}$ plus additional conditional costs when fraud is found. Under the one-shot inspection model in Part~II, the equilibrium audit rate is endogenous. Under protocol-imposed randomized audits, $v$ includes the imposed audit probability.
+
+A sufficient participation condition is $C_{chan} + v C_{safe} < C_{self}$, together with a bound on expected loss from undetected fraud. If an incorrect result causes loss $L$ and fraud is not always detected, then the expected additional loss term is $q(1-v)L$ in the inspection model, which further tightens participation when $L$ is large.
+
+\subsection*{Summary of Part I}
+
+Part~I provides two conditions that are jointly needed for deterrence via enforceable disputes: (i) the challenger must be willing to dispute conditional on identifying fraud, and (ii) the resulting punishment probability must satisfy the provider incentive constraint. A protocol can eliminate the impunity region by enforcing a minimum stake floor derived from Proposition~\ref{prop:dispute-condition}.
+
+\newpage
+
+%=============================================================================
+\part{Fraud Detection}
+%=============================================================================
+
+Part~II studies detection. Even if disputes are enforceable conditional on fraud being identified, fraud may remain profitable if clients do not audit and no other challengers exist. We analyze two complementary models. First, a belief-based model where the client audits only when posterior belief exceeds a threshold. Second, a one-shot inspection game where the provider and client randomize. Both models yield explicit dependence of fraud on stake, verification costs, and job-specific loss $L$.
+
+\section{Belief-based auditing}
+
+\subsection{Signals and posterior belief}
+
+Let $\mu \in [0,1]$ denote the client's posterior belief that the provider cheated and returned an incorrect output.
+
+A rigorous model specifies a signal $s$ observed by the client, with conditional densities $f_H(s)$ and $f_C(s)$ under honest and cheating behavior. Given prior $\mu_0\in(0,1)$, Bayes' rule yields
+\begin{equation}
+\mu(s) = \Prob(C\mid s) = \frac{\mu_0 f_C(s)}{\mu_0 f_C(s) + (1-\mu_0) f_H(s)}.
+\end{equation}
+The signal can encode sanity checks, reputation, historical behavior, and any auxiliary verification heuristics.
+
+\subsection{Audit and dispute decisions}
+
+At the output stage, the client chooses either to accept the output or to audit via safe fallback. If the client accepts and the output is incorrect, the client incurs loss $L$. If the client audits, the client pays $C_{safe}$. If fraud is found, the client can submit a fraud proof, incurring additional cost $c_{proof}+c_{tx}$ and facing enforcement reliability $p_w$.
+
+Define the net expected incremental payoff from auditing rather than accepting as a function of posterior belief $\mu$ and parameters. If the client accepts, expected loss is $\mu L$. If the client audits, the loss $L$ is avoided and, conditional on fraud, the client can obtain expected dispute surplus
+\begin{equation}
+\Delta := p_w(\beta S_P + \lambda P_{set}) - (c_{proof}+c_{tx}) - (1-p_w)B_C.
+\end{equation}
+Auditing yields expected net gain relative to accepting
+\begin{equation}
+G(\mu) = -C_{safe} + \mu(L + \Delta).
+\end{equation}
+
+\begin{proposition}[Belief threshold for auditing]
+\label{prop:belief-threshold}
+Assume $L+\Delta>0$. The client audits if and only if
+\begin{equation}
+\boxed{\;\mu > \mu^* := \frac{C_{safe}}{L+\Delta}.\;}
+\end{equation}
+If $L+\Delta \le 0$, then auditing is never optimal for any $\mu\in[0,1]$.
+\end{proposition}
+
+\begin{proof}
+The client audits if and only if $G(\mu)>0$. Solving $-C_{safe}+\mu(L+\Delta)>0$ for $\mu$ yields the threshold. If $L+\Delta\le 0$, then $G(\mu)\le -C_{safe}<0$ for all $\mu$.
+\end{proof}
+
+This threshold makes explicit how stake and routing influence detection through incentives. Increasing $S_P$ increases $\Delta$ via $\beta S_P$ and therefore lowers $\mu^*$. Increasing $\lambda$ lowers $\mu^*$ when payment is refunded to the challenger on successful disputes. Increasing $C_{safe}$ raises $\mu^*$ and reduces auditing. Larger job loss $L$ lowers $\mu^*$ and increases auditing for high-stakes computations.
+
+\section{Inspection game with mixed equilibrium}
+
+We now model the one-shot interaction in which the provider chooses whether to cheat and the client chooses whether to audit, without observing the other's action. The client is blind in the sense that auditing is a costly action, while acceptance can expose the client to loss $L$ if the output is incorrect.
+
+\subsection{Game specification}
+
+\begin{definition}[Inspection game]
+The stage game has actions $\{H,C\}$ for the provider (honest, cheat) and $\{A,V\}$ for the client (accept, audit). The moves are simultaneous. If the client audits and fraud is found, the client submits a fraud proof and enforcement succeeds with probability $p_w$.
+\end{definition}
+
+Define $C_{audit}:=C_{safe}$ and define the expected net dispute surplus conditional on fraud, $\Delta$, as in Proposition~\ref{prop:belief-threshold}.
+
+\begin{table}[ht]
+\centering
+\begin{tabular}{@{}lcc@{}}
+\toprule
+& Client: Accept ($A$) & Client: Audit ($V$) \\
+\midrule
+Provider: Honest ($H$) & $(P_{set}-c_H,\; -P_{set})$ & $(P_{set}-c_H,\; -P_{set}-C_{safe})$ \\
+Provider: Cheat ($C$) & $(P_{set}-c_F,\; -P_{set}-L)$ & $(-S_P-c_F,\; -P_{set}-C_{safe}+\Delta)$ \\
+\bottomrule
+\end{tabular}
+\caption{Payoffs (Provider, Client). Correct computation value is normalized to zero. Accepting a wrong output imposes loss $L$ on the client. Auditing incurs $C_{safe}$. If fraud is found under auditing, the client can obtain expected dispute surplus $\Delta$.}
+\label{tab:payoff-matrix-redline}
+\end{table}
+
+\subsection{Mixed equilibrium}
+
+Let $q\in[0,1]$ be the probability the provider cheats and let $v\in[0,1]$ be the probability the client audits.
+
+\begin{proposition}[Provider indifference condition]
+\label{prop:provider-indifference}
+If the provider mixes in equilibrium, then the client audit probability satisfies
+\begin{equation}
+\boxed{\;v^* = \frac{c_H-c_F}{P_{set}+S_P}.\;}
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+The provider payoff from honest execution is $U_P(H)=P_{set}-c_H$, independent of $v$. The expected payoff from cheating is
+\[
+\E[U_P(C)] = (1-v)(P_{set}-c_F) + v(-S_P-c_F) = P_{set}-c_F - v(P_{set}+S_P).
+\]
+Indifference requires $P_{set}-c_H = P_{set}-c_F - v(P_{set}+S_P)$, hence $v(P_{set}+S_P)=c_H-c_F$ and the stated expression follows.
+\end{proof}
+
+The expression for $v^*$ coincides with the provider incentive threshold $\theta$ when detection probability is interpreted as audit frequency, in the sense that when $p_w=1$ and an audit implies punishment, $p_d=v$.
+
+\begin{proposition}[Client indifference condition]
+\label{prop:client-indifference}
+Assume $L+\Delta>0$. If the client mixes in equilibrium, then the provider cheating probability satisfies
+\begin{equation}
+\boxed{\;q^* = \frac{C_{safe}}{L+\Delta}.\;}
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+The expected client payoff from accepting is
+\[
+\E[U_C(A)] = (1-q)(-P_{set}) + q(-P_{set}-L) = -P_{set} - qL.
+\]
+The expected client payoff from auditing is
+\[
+\E[U_C(V)] = (1-q)(-P_{set}-C_{safe}) + q(-P_{set}-C_{safe}+\Delta) = -P_{set}-C_{safe}+q\Delta.
+\]
+Indifference requires $-P_{set}-qL = -P_{set}-C_{safe}+q\Delta$, hence $q(L+\Delta)=C_{safe}$. Under $L+\Delta>0$, this yields the stated expression.
+\end{proof}
+
+\begin{theorem}[Mixed equilibrium and boundary cases]
+\label{thm:mixed-equilibrium}
+Assume $0<c_H-c_F<P_{set}+S_P$ and $0<C_{safe}<L+\Delta$. Then the inspection game admits a unique mixed-strategy Nash equilibrium with
+\[
+(v^*,q^*) = \left(\frac{c_H-c_F}{P_{set}+S_P},\; \frac{C_{safe}}{L+\Delta}\right).
+\]
+If $C_{safe}\ge L+\Delta$, then the client's best response is never to audit and cheating becomes a best response for the provider. If $c_H-c_F\ge P_{set}+S_P$, then the provider's best response is to cheat regardless of the client's audit probability.
+\end{theorem}
+
+\begin{proof}
+Under the stated strict inequalities, the indifference conditions in Propositions~\ref{prop:provider-indifference} and \ref{prop:client-indifference} yield $v^*,q^*\in(0,1)$. Standard inspection-game arguments imply uniqueness of the mixed equilibrium because each player's expected payoff difference between actions is affine in the opponent's mixing probability, hence each player has at most one mixing point. Boundary cases follow from the sign of the payoff differences when denominators are nonpositive or when the computed mixing probabilities lie outside $[0,1]$.
+\end{proof}
+
+\subsection{Interpretation and comparative statics}
+
+The equilibrium cheating rate $q^*$ decreases when $S_P$ increases because $\Delta$ increases linearly in $\beta S_P$. The equilibrium audit rate $v^*$ decreases when $S_P$ increases because a larger penalty requires less auditing to satisfy provider indifference. Job loss $L$ reduces $q^*$ because auditing becomes privately beneficial at lower fraud rates when accepting a wrong output is costly.
+
+The parameter $p_w$ enters through $\Delta$. Lower enforcement reliability reduces $\Delta$ and increases equilibrium cheating. A protocol that improves liveness and reduces censorship risk effectively lowers both $S_P^{min}$ in Part~I and $q^*$ in Part~II.
+
+\section{Reputation and repeated interaction (extension)}
+
+Reputation can be modeled as an on-chain observable state variable $\rho$ that shifts priors or alters feasible actions through access control. For example, clients can set a prior $\mu_0=f(\rho)$ with $f'(\rho)<0$. For reputation to be meaningful, it must be derived from hard-to-forge history such as stake-weighted service volume, time in system, and dispute outcomes, rather than self-reported ratings. A repeated-game model can combine stake slashing and continuation value, which increases effective deterrence by raising the long-run cost of cheating. This extension can reduce required stake for a given target fraud rate when repeated interaction is strong and identity rotation is costly.
+
+\newpage
+
+%=============================================================================
+\section{Protocol design recommendations}
+%=============================================================================
+
+This section translates the preceding incentive constraints into implementable protocol rules. The recommendations target two objectives: eliminate an impunity region where disputes are not initiated, and bound equilibrium fraud for blind clients by inducing auditing from either clients, watchers, or the protocol itself.
+
+\subsection{Stake floors indexed by job class}
+
+A protocol can enforce a minimum stake floor as a function of job class, $S_{min}(\text{job})$, using conservative estimates of $C_{disp}$ and relevant network conditions. Proposition~\ref{prop:dispute-condition} yields
+\begin{equation}
+S_{min}(\text{job}) = \max\left\{0,\;\frac{C_{disp}(\text{job}) + (1-p_w)B_C - p_w\lambda P_{set}(\text{job})}{p_w\beta}\right\}.
+\end{equation}
+When $\lambda=1$, routing the escrowed payment to the challenger reduces the stake requirement for credible enforcement. When $p_w<1$, stake floors must increase, or the protocol must compensate challengers through larger rewards, lower costs, or higher $p_w$.
+
+\subsection{Permissionless challenging and watcher markets}
+
+If challenging is permissionless, then detection does not rely on client attention. A permissionless challenger will dispute whenever Proposition~\ref{prop:dispute-condition} holds for the challenger cost structure. This creates a market for auditing and can raise the effective detection probability $p_d$ without increasing client burden. To support this design, the protocol must ensure data availability for recomputation and must specify deterministic dispute interfaces that third parties can use.
+
+\subsection{Randomized audits}
+
+Randomized protocol audits provide an exogenous detection baseline. If the protocol audits with probability $\alpha$ and private auditing occurs with probability $v$, then the effective punishment probability is $p_d = p_w(\alpha + (1-\alpha)v)$ under independence. A small $\alpha$ can materially improve deterrence for low-attention clients and can reduce the required stake to satisfy the provider incentive constraint. Funding can come from fees, a portion of slashed stake, or a dedicated audit budget.
+
+\subsection{Reducing verification cost}
+
+Lower $C_{safe}$ reduces both the enforcement stake floor and the equilibrium fraud rate. Trusted fallback providers, standardized execution traces, and proof systems that support incremental or sampled verification can reduce $C_{safe}$ and $c_{proof}$. The protocol can further reduce $c_{tx}$ by minimizing the number of on-chain transactions required for a dispute and by using predictable gas patterns.
+
+\subsection{Timeout sizing}
+
+Timeouts should be sized by job class to satisfy $T \ge t_{safe}+t_{proof}+t_{tx}+t_{finality}$. If a single global $T$ is used, it must be sized to the worst supported job class, which can impose unnecessary latency for short jobs. A job-indexed challenge window reduces latency while preserving feasibility.
+
+\subsection{Anti-griefing}
+
+Auditing and disputing can impose externalities on honest providers through delayed settlement and additional on-chain load. A protocol can reduce griefing by requiring a bond $B_C$ that is forfeited when enforcement fails, by routing part of dispute costs to the initiator, and by designing the dispute flow so that honest providers are not delayed by unverifiable challenges. When $p_w$ is close to one, $B_C$ can be small. When $p_w$ is materially below one, $B_C$ becomes economically relevant and should be reflected in stake floor calculations.
+
+%=============================================================================
+\section{Conclusions}
+
+The analysis yields explicit constraints that can be used to parameterize Hellas. In the dispute subgame, credible enforcement requires that disputing be privately profitable for an eligible challenger, which yields a minimum viable stake condition that depends on enforcement reliability $p_w$, slashing reward share $\beta$, payment routing $\lambda$, dispute costs, and challenge bond $B_C$. Given credible enforcement, provider incentive compatibility requires that the effective punishment probability $p_d$ exceed the threshold $\theta = \frac{c_H-c_F}{P_{set}+S_P}$.
+
+In the blind client setting, detection is endogenous. A belief-based model yields an auditing threshold $\mu^*=\frac{C_{safe}}{L+\Delta}$. A one-shot inspection model yields a mixed equilibrium with audit rate $v^*=\frac{c_H-c_F}{P_{set}+S_P}$ and cheating rate $q^*=\frac{C_{safe}}{L+\Delta}$ under standard feasibility conditions. These expressions show how stake, verification costs, enforcement reliability, and job loss determine equilibrium outcomes.
+
+Protocol design can improve performance by enforcing job-indexed stake floors, routing sufficient reward to challengers, enabling permissionless challenging, adding randomized audits, lowering verification costs, and sizing timeouts to guarantee dispute feasibility.
+
+\end{document}
