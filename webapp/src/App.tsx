@@ -212,6 +212,16 @@ function App() {
                             formatValue={(v) => `${(v * 100).toFixed(0)}%`}
                             description="Payment routed on success"
                           />
+                          <Slider
+                            label="Audit Floor (v_min)"
+                            value={params.v_min}
+                            onChange={(v) => updateParam('v_min', v)}
+                            min={0}
+                            max={0.2}
+                            step={0.01}
+                            formatValue={(v) => `${(v * 100).toFixed(0)}%`}
+                            description="Minimum random audit probability"
+                          />
                         </ParamGroup>
 
                         <button

@@ -18,6 +18,7 @@ export interface ProtocolParams {
   p_w: number;      // Enforcement probability
   B_C: number;      // Challenge bond
   L: number;        // Client loss from incorrect result
+  v_min: number;    // Minimum audit probability (random audit floor)
 }
 
 export interface EquilibriumValues {
@@ -37,6 +38,7 @@ export interface SimulationResult {
   periods: number[];
   fraudRates: number[];
   detectionRates: number[];
+  auditRates: number[];        // Adaptive audit probability over time
   reputationHistory: number[];
   providerProfits: number[];
   clientLosses: number[];
@@ -62,6 +64,7 @@ export const DEFAULT_PARAMS: ProtocolParams = {
   p_w: 0.95,
   B_C: 5.0,
   L: 50,
+  v_min: 0.02,  // 2% minimum random audit probability
 };
 
 /**
@@ -167,7 +170,7 @@ class SeededRandom {
 }
 
 /**
- * Run a simplified simulation
+ * Run a simplified simulation with adaptive client auditing
  */
 export function runSimulation(
   params: ProtocolParams,
@@ -182,6 +185,7 @@ export function runSimulation(
   const periods: number[] = [];
   const fraudRates: number[] = [];
   const detectionRates: number[] = [];
+  const auditRates: number[] = [];
   const reputationHistory: number[] = [];
   const providerProfits: number[] = [];
   const clientLosses: number[] = [];
@@ -194,11 +198,17 @@ export function runSimulation(
   let cumProviderProfit = 0;
   let cumClientLoss = 0;
 
+  // Adaptive auditing state: track recent fraud observations
+  const recentWindowSize = 5; // periods to consider for fraud estimation
+  const recentFraudRates: number[] = [];
+  let adaptiveAuditProb = eq.v_star; // Start at equilibrium
+
   for (let t = 0; t < nPeriods; t++) {
     let periodFrauds = 0;
     let periodDetected = 0;
     let periodProviderProfit = 0;
     let periodClientLoss = 0;
+    let periodAudits = 0;
 
     for (let j = 0; j < nJobsPerPeriod; j++) {
       totalJobs++;
@@ -206,26 +216,43 @@ export function runSimulation(
       // Determine if provider is honest type
       const isHonestType = rng.next() < honestFraction;
 
-      // Provider decision
+      // Provider decision: now considers the adaptive audit probability
       let cheats = false;
       if (!isHonestType) {
-        // Rational/adversarial: cheat with probability based on audit estimate
-        const estimatedAuditProb = eq.v_star * Math.exp(-0.02 * (avgReputation - 50));
+        // Rational provider estimates audit probability based on:
+        // 1. Current adaptive audit rate (public knowledge from recent behavior)
+        // 2. Reputation adjustment (providers may think high rep = less scrutiny)
+        const reputationFactor = Math.exp(-0.01 * (avgReputation - 50)); // Reduced from 0.02
+        const estimatedAuditProb = adaptiveAuditProb * reputationFactor;
+
         const U_honest = params.P_set - params.c_H;
         const U_cheat = params.P_set - params.c_F - estimatedAuditProb * (params.P_set + params.S_P);
-        cheats = U_cheat > U_honest && rng.next() > 0.3; // Some noise
+
+        // Provider plays mixed strategy when utilities are close
+        const utilityDiff = U_cheat - U_honest;
+        if (utilityDiff > 1) {
+          // Clear advantage to cheat
+          cheats = rng.next() > 0.2; // 80% cheat
+        } else if (utilityDiff > -1) {
+          // Utilities close: play mixed strategy near q*
+          cheats = rng.next() < eq.q_star;
+        }
+        // else: U_honest clearly better, don't cheat
       }
 
       if (cheats) {
         totalFrauds++;
         periodFrauds++;
 
-        // Client audit decision
-        const audits = rng.next() < eq.v_star;
+        // Client audit decision: adaptive with floor
+        // Audit probability = max(v_min, adaptive rate)
+        const effectiveAuditProb = Math.max(params.v_min, adaptiveAuditProb);
+        const audits = rng.next() < effectiveAuditProb;
 
         if (audits) {
           totalDetected++;
           periodDetected++;
+          periodAudits++;
 
           // Dispute outcome
           if (rng.next() < params.p_w) {
@@ -249,12 +276,39 @@ export function runSimulation(
       }
     }
 
+    // Update adaptive audit probability based on observed fraud
+    const periodFraudRate = periodFrauds / nJobsPerPeriod;
+    recentFraudRates.push(periodFraudRate);
+    if (recentFraudRates.length > recentWindowSize) {
+      recentFraudRates.shift();
+    }
+
+    // Clients adapt: if fraud is high, audit more; if low, audit less
+    // But always respect the floor v_min and cap at reasonable maximum
+    const observedFraudRate = recentFraudRates.reduce((a, b) => a + b, 0) / recentFraudRates.length;
+    const Delta = computeDelta(params);
+
+    // Adaptive rule: v_adaptive = C_safe / (L + Delta) when q = observedFraudRate
+    // At equilibrium: q* = C_safe / (L + Delta), so if q > q*, clients should audit more
+    // Scale audit probability proportionally to observed fraud vs equilibrium
+    const fraudRatio = eq.q_star > 0 ? observedFraudRate / eq.q_star : 1;
+    const targetAuditProb = eq.v_star * Math.sqrt(fraudRatio); // Dampened response
+
+    // Smooth adjustment toward target (don't jump instantly)
+    const learningRate = 0.3;
+    adaptiveAuditProb = adaptiveAuditProb + learningRate * (targetAuditProb - adaptiveAuditProb);
+
+    // Enforce floor and ceiling
+    adaptiveAuditProb = Math.max(params.v_min, Math.min(1.0, adaptiveAuditProb));
+
     cumProviderProfit += periodProviderProfit;
     cumClientLoss += periodClientLoss;
 
     periods.push(t);
-    fraudRates.push(periodFrauds / nJobsPerPeriod);
-    detectionRates.push(periodFrauds > 0 ? periodDetected / periodFrauds : 1);
+    fraudRates.push(periodFraudRate);
+    // Detection rate: only count periods with fraud; use previous value for no-fraud periods
+    detectionRates.push(periodFrauds > 0 ? periodDetected / periodFrauds : (t > 0 ? detectionRates[t-1] : eq.v_star));
+    auditRates.push(adaptiveAuditProb);
     reputationHistory.push(avgReputation);
     providerProfits.push(cumProviderProfit);
     clientLosses.push(cumClientLoss);
@@ -265,6 +319,7 @@ export function runSimulation(
     periods,
     fraudRates,
     detectionRates,
+    auditRates,
     reputationHistory,
     providerProfits,
     clientLosses,
@@ -273,7 +328,7 @@ export function runSimulation(
     totalFrauds,
     totalDetected,
     finalFraudRate: totalFrauds / totalJobs,
-    finalDetectionRate: totalFrauds > 0 ? totalDetected / totalFrauds : 1,
+    finalDetectionRate: totalFrauds > 0 ? totalDetected / totalFrauds : eq.v_star,
     socialWelfare: cumProviderProfit - cumClientLoss,
   };
 }

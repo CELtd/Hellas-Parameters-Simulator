@@ -20,6 +20,7 @@ export function SimulationChart({ result, metric }: SimulationChartProps) {
     period,
     fraudRate: result.fraudRates[i] * 100,
     detectionRate: result.detectionRates[i] * 100,
+    auditRate: result.auditRates[i] * 100,
     reputation: result.reputationHistory[i],
     welfare: result.cumulativeWelfare[i],
     providerProfit: result.providerProfits[i],
@@ -28,10 +29,10 @@ export function SimulationChart({ result, metric }: SimulationChartProps) {
 
   const configs = {
     fraudRate: {
-      keys: ['fraudRate', 'detectionRate'],
-      colors: ['#ef4444', '#22c55e'],
-      labels: ['Fraud Rate (%)', 'Detection Rate (%)'],
-      yFormat: (v: number) => `${v.toFixed(0)}%`,
+      keys: ['fraudRate', 'auditRate'],
+      colors: ['#ef4444', '#0ea5e9'],
+      labels: ['Fraud Rate (%)', 'Audit Rate (%)'],
+      yFormat: (v: number) => `${v.toFixed(1)}%`,
     },
     welfare: {
       keys: ['providerProfit', 'clientLoss', 'welfare'],
